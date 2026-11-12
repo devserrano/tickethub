@@ -10,7 +10,7 @@ Proyecto final de **Sistemas de la Información** — FES Aragón, UNAM.
 | --- | --- |
 | Backend | Java 21, Spring Boot 3.5, Maven |
 | Seguridad | Spring Security + JWT |
-| Datos | PostgreSQL 16, Spring Data JPA, Flyway |
+| Datos | MySQL 8.4, Spring Data JPA, Flyway |
 | Archivos | S3 (MinIO en local) |
 | Correo | Spring Mail (Mailpit en local) |
 | Reportes | OpenPDF (PDF), Apache POI (Excel) |
@@ -26,15 +26,22 @@ Proyecto final de **Sistemas de la Información** — FES Aragón, UNAM.
    git clone https://github.com/<usuario>/tickethub.git
    cd tickethub
    ```
-2. Levanta Postgres, MinIO y Mailpit:
+2. Crea tu `.env` (no se sube a Git) y cambia los valores `CAMBIAR` por contraseñas tuyas:
+   ```bash
+   cp .env.example .env
+   ```
+3. Levanta MySQL, MinIO y Mailpit y espera a que MySQL diga `healthy`:
    ```bash
    docker compose up -d
+   docker compose ps
    ```
-3. Corre la API desde IntelliJ (`TicketHubApplication`) o con Maven:
+4. Corre la API desde IntelliJ (`TicketHubApplication`, con el directorio de trabajo en la raíz del proyecto
+   para que lea el `.env`) o con Maven:
    ```bash
-   ./mvnw spring-boot:run
+   mvn spring-boot:run
    ```
-4. Listo:
+   Al arrancar, Flyway crea las tablas y la app crea los usuarios semilla.
+5. Listo:
    | Qué | URL |
    | --- | --- |
    | API | http://localhost:8080 |
@@ -49,7 +56,38 @@ Todo dockerizado, incluida la API:
 docker compose --profile app up -d --build
 ```
 
-Las variables de entorno están en `.env.example`. En local no necesitas cambiar nada.
+Las variables de entorno están en `.env.example`.
+
+### Base de datos (MySQL en Docker)
+
+Cada quien levanta su propio MySQL idéntico desde el repo; no hay base compartida.
+
+| Dato | Valor |
+| --- | --- |
+| Host / puerto | `localhost` / `3307` (el 3307 evita chocar con un MySQL instalado en tu máquina) |
+| Base de datos | `tickethub` |
+| Usuario / contraseña | `DB_USER` / `DB_PASSWORD` de tu `.env` |
+
+Para conectarte con DBeaver o Workbench usa esos datos. Comandos útiles:
+
+```bash
+docker compose stop mysql          # pausar sin perder datos
+docker compose start mysql         # reanudar
+docker compose logs -f mysql       # ver logs
+docker compose down -v             # BORRA todo (incluida la base) y empiezas de cero
+```
+
+**Migraciones:** el esquema lo manda Flyway (`src/main/resources/db/migration`). Nunca edites una migración
+que ya se ejecutó; crea una nueva (`V3__...sql`) y avisa al equipo para no repetir número.
+
+**Usuarios semilla** (los crea la app al arrancar; contraseñas en tu `.env`):
+
+| Correo | Rol | Contraseña |
+| --- | --- | --- |
+| admin@tickethub.local | ADMIN | `ADMIN_PASSWORD` |
+| liberador@tickethub.local | LIBERADOR | `DEMO_PASSWORD` |
+| agente@tickethub.local | AGENT | `DEMO_PASSWORD` |
+| usuario@tickethub.local | USER | `DEMO_PASSWORD` |
 
 ## Estructura del proyecto
 
@@ -102,14 +140,19 @@ postman/   k6/   docs/
 
 ```mermaid
 stateDiagram-v2
-    [*] --> OPEN
-    OPEN --> IN_PROGRESS: asignado
-    OPEN --> CANCELLED: cancela
+    [*] --> PENDING_REVIEW: crea ticket
+    PENDING_REVIEW --> REJECTED: liberador rechaza (motivo)
+    PENDING_REVIEW --> APPROVED: liberador aprueba
+    PENDING_REVIEW --> CANCELLED: spam o duplicado
+    REJECTED --> PENDING_REVIEW: solicitante corrige
+    REJECTED --> CANCELLED: solicitante o admin
+    APPROVED --> APPROVED: urgente (sube prioridad, recalcula SLA)
+    APPROVED --> IN_PROGRESS: se asigna agente
     IN_PROGRESS --> ON_HOLD: falta info
-    ON_HOLD --> IN_PROGRESS: responde
+    ON_HOLD --> IN_PROGRESS: solicitante responde
     IN_PROGRESS --> RESOLVED: solución escrita
-    RESOLVED --> IN_PROGRESS: reabre (máx. 7 días)
-    RESOLVED --> CLOSED: confirma o 3 días
+    RESOLVED --> IN_PROGRESS: reabre (máx. 3 días)
+    RESOLVED --> CLOSED: confirma o 3 días sin respuesta
     CLOSED --> [*]
     CANCELLED --> [*]
 ```
@@ -125,12 +168,15 @@ erDiagram
     TICKETS ||--o{ ATTACHMENTS : tiene
     COMMENTS ||--o{ ATTACHMENTS : "puede tener"
     TICKETS ||--o{ TICKET_HISTORY : registra
+    USERS ||--o{ TICKETS : "libera (revisa)"
     USERS ||--o{ PASSWORD_RESET_TOKENS : solicita
+    USERS ||--o{ NOTIFICATIONS : recibe
+    TICKETS ||--o{ NOTIFICATIONS : genera
 ```
 
 ### Arquitectura
 
-_Pendiente: diagrama de arquitectura (frontend → API en capas → PostgreSQL / S3 / SMTP)._
+_Pendiente: diagrama de arquitectura (frontend → API en capas → MySQL / S3 / SMTP)._
 
 ## Cómo trabajamos (equipo)
 
