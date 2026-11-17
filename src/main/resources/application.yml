@@ -47,6 +47,9 @@ server:
   port: ${PORT:8080}
 
 management:
+  health:
+    mail:
+      enabled: false   # sin Mailpit/SMTP el health marcaría DOWN; reactivar cuando el correo sea parte del sistema
   endpoints:
     web:
       exposure:
