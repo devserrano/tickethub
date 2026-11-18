@@ -76,7 +76,7 @@ services:
       DB_NAME: ${DB_NAME:-tickethub}
       DB_USER: ${DB_USER:-tickethub_app}
       DB_PASSWORD: ${DB_PASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?Falta JWT_SECRET, copia .env.example a .env}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
       DEMO_PASSWORD: ${DEMO_PASSWORD}
       MAIL_HOST: mailpit

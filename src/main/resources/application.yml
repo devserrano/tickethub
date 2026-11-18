@@ -63,7 +63,8 @@ app:
     admin-password: ${ADMIN_PASSWORD:}
     demo-password: ${DEMO_PASSWORD:}
   jwt:
-    secret: ${JWT_SECRET:cambia-este-secreto-en-produccion-debe-tener-32-bytes-o-mas}
+    # Sin valor por defecto a propósito: si falta JWT_SECRET la app no arranca (un secreto público permitiría falsificar tokens)
+    secret: ${JWT_SECRET}
     expiration-minutes: 60
     cookie-name: access_token
     # false solo en local (http://localhost); en producción con HTTPS debe ser true
